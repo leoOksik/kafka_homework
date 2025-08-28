@@ -1,0 +1,44 @@
+1) Запуск
+export DOCKER_CLI_HINTS=false
+docker compose up -d
+docker compose ps -a
+docker logs -f connect
+^C
+
+2) Статус и плагины коннекторов
+curl http://localhost:8083 | jq
+curl http://localhost:8083/connector-plugins | jq
+
+3) Подключаемся к базе и загружаем данные
+docker exec -ti postgres psql -U postgres
+
+CREATE TABLE users ( id SERIAL PRIMARY KEY,
+first_name TEXT, last_name TEXT, gender TEXT, phone_number TEXT);
+
+INSERT INTO users (first_name, last_name, gender, phone_number)
+VALUES ('Ji', 'Jason', 'Male', '+48975845'),
+       ('Lo', 'Hanson', 'Male', '+47985845'),
+       ('Kim', 'Larsen', 'Male', '+479475845');
+
+SELECT * FROM users;
+\q
+
+4) Создаём коннектор users-cdc-connector
+curl -X POST --data-binary "@users-cdc.json" -H "Content-Type: application/json" http://localhost:8083/connectors | jq
+
+5) Проверяем коннектор users-cdc-connector
+curl http://localhost:8083/connectors | jq
+curl http://localhost:8083/connectors/users-cdc-connector/status | jq
+
+6) Проверяем топики
+docker exec kafka1 kafka-topics --list --bootstrap-server kafka1:9092,kafka2:9092,kafka3:9092
+
+7) Читаем топик postgres.cdc.public.users
+docker exec kafka1 kafka-console-consumer --topic postgres.cdc.public.users --bootstrap-server kafka1:9092,kafka2:9092,kafka3:9092 --from-beginning --property print.offset=true --property print.key=true
+^C
+
+8) Завершение
+docker compose down
+docker container prune -f
+docker volume prune -f
+docker network prune -f
